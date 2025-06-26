@@ -11,4 +11,8 @@ module alu(
             default: result = a + b; // Default to ADD
         endcase
     end
+
+
+
+    
 endmodule
