@@ -1,0 +1,33 @@
+
+## Data Memory Organization
+
+### Predefined Data Locations
+| Address | Name        | Description                     |
+|---------|-------------|---------------------------------|
+| 0x08    | COUNT       | Loop counter (initial value 10) |
+| 0x09    | INCREMENT   | Decrement value (1)             |
+| 0x0A    | SUM         | Sum accumulator (initial 0)     |
+| 0x0B    | RESULT      | Final computation result        |
+
+### Special Addresses
+| Address Range | Purpose                      |
+|---------------|------------------------------|
+| 0x00-0x3F     | General purpose data storage |
+| 0x40-0x7F     | Reserved for program data     |
+| 0x80-0xFF     | Memory-mapped I/O area        |
+
+## Instruction Memory
+- 256 x 16-bit words (512 bytes equivalent)
+- Addresses refer to 16-bit instruction words
+- Last 16 words reserved for interrupt vectors
+
+## I/O Memory Mapping (Optional)
+When peripherals are implemented:
+
+| Address | Peripheral       | Access | Description            |
+|---------|-----------------|--------|------------------------|
+| 0x80    | GPIO_DATA       | R/W    | General Purpose I/O    |
+| 0x81    | GPIO_DIR        | W      | Data direction reg     |
+| 0x82    | UART_TX         | W      | Transmit data          |
+| 0x83    | UART_RX         | R      | Receive data           |
+| 0x84    | TIMER_CTRL      | R/W    | Timer control          |

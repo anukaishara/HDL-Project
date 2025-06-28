@@ -1,0 +1,39 @@
+
+## Core Instruction Set
+
+### Arithmetic Instructions
+| Mnemonic | Opcode | Format          | Description                     |
+|----------|--------|-----------------|---------------------------------|
+| ADD      | 0x0    | ADD Rd, Rs, Rt  | Rd = Rs + Rt                    |
+| SUB      | 0x1    | SUB Rd, Rs, Rt  | Rd = Rs - Rt                    |
+
+### Memory Instructions
+| Mnemonic | Opcode | Format          | Description                     |
+|----------|--------|-----------------|---------------------------------|
+| LW       | 0x2    | LW Rt, imm(Rs)  | Rt = MEM[Rs + imm]              |
+| SW       | 0x3    | SW Rt, imm(Rs)  | MEM[Rs + imm] = Rt              |
+
+### Control Flow Instructions
+| Mnemonic | Opcode | Format          | Description                     |
+|----------|--------|-----------------|---------------------------------|
+| BEQ      | 0x4    | BEQ Rs, Rt, imm | PC += (Rs == Rt) ? imm : 1      |
+| JMP      | 0x5    | JMP target      | PC = target                     |
+
+### Register Usage
+- Rs: Source register 1
+- Rt: Source register 2 / Target register
+- Rd: Destination register
+- imm: 8-bit immediate value (sign-extended where applicable)
+
+## Example Programs
+
+### Sum of Numbers
+```assembly
+        LW   R1, 8(R0)     # Load count (10)
+        LW   R2, 9(R0)     # Load increment (1)
+        LW   R3, 10(R0)    # Initialize sum (0)
+loop:   ADD  R3, R3, R1    # sum += count
+        SUB  R1, R1, R2    # count--
+        BEQ  R1, R0, -4    # Branch to loop if count != 0
+        SW   R3, 11(R0)    # Store result
+        JMP  0             # Restart
