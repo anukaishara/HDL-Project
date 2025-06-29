@@ -142,8 +142,8 @@ module pc (
     input [7:0] next_pc,    // Next address to jump to
     output reg [7:0] current_pc // Current instruction address
 );
-    always @(posedge clk or posedge reset) begin
-        if (reset) current_pc <= 0; // Reset to address 0
+    always @(posedge clk or negedge reset) begin
+        if (!reset) current_pc <= 0; // Reset to address 0
         else current_pc <= next_pc; // Update to next address
     end
 endmodule
@@ -151,35 +151,36 @@ endmodule
 
 
 
-
 // Instruction Memory: stores program instructions in ROM
 module instruction_memory (
-    inout clk,
-    input [7:0] address, // Address to read instruction from
-    output reg [15:0] instruction // Instruction output
+    input clk,                         
+    input [7:0] address,               // Address to read instruction from
+    output reg [15:0] instruction      // Instruction output
 );
-    parameter MEM_INIT_FILE = ""; // Memory initialization file (hex format)
-    reg [15:0] rom [0:255]; // ROM memory
+    parameter MEM_INIT_FILE = "";      // Memory initialization file (hex format)
+    reg [15:0] rom [0:255];            // ROM memory
     
     initial begin
+        integer i;                     // Declare loop variable inside initial
         if (MEM_INIT_FILE != "") begin 
             // Initialize ROM from file
             $readmemh(MEM_INIT_FILE, rom); 
         end else begin
-            // Default program
-            rom[0] = 16'h4810; // LOAD R1, 0x10(R0)   ; R1 = MEM[0x10]
-            rom[1] = 16'h1200; // ADD R2, R1, R0      ; R2 = R1 + R0
-            rom[2] = 16'h7020; // STORE R2, 0x20(R0)  ; MEM[0x20] = R2
-            rom[3] = 16'h8005; // JUMP 0x05           ; Jump to instruction 5
-            rom[5] = 16'h48FF; // LOAD R1, 0xFF(R0)   ; R1 = external_data_in
-            rom[6] = 16'h1D80; // SUB R3, R1, R2      ; R3 = R1 - R2
+            // Example : Output the Bitwise Inverse of the Input
+            rom[0] = 16'h48FF; // LOAD R1, 0xFF(R0)        ; R1 = external_data_in
+            rom[1] = 16'h0900; // SUB R2, R0, R1           ; R2 = 0 - R1 = ~R1 + 1 (two's complement)
+            rom[2] = 16'h1201; // ADD R2, R2, R0 + 1       ; R2 = R2 + 1 = ~R1    (if immediate add supported)
+            rom[3] = 16'h72FF; // STORE R2, 0xFF(R0)       ; LEDs = ~input
+            rom[4] = 16'h8004; // JUMP 0x04                ; Loop forever
 
-            for (integer i=7; i<256; i++) rom[i] = 16'h0000;
+            for (i = 5; i < 256; i = i + 1) begin
+                rom[i] = 16'h0000;
+            end
         end
     end
     
     always @(posedge clk) begin
-        instruction = rom[address]; // Read instruction from ROM
+        instruction <= rom[address]; // Use non-blocking assignment for registers
     end
 endmodule
 
@@ -252,8 +253,8 @@ module register_file (
 );
     reg [7:0] regs [0:3];
     
-    always @(posedge clk or posedge reset) begin
-        if (reset) begin
+    always @(posedge clk or negedge reset) begin
+        if (!reset) begin
             regs[0] <= 8'h00;
             regs[1] <= 8'h00;
             regs[2] <= 8'h00;
