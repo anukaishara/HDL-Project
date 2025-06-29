@@ -34,8 +34,9 @@ module risc_processor (
     wire mem_read;          // Enable memory read
     wire mem_write;         // Enable memory write
     wire alu_src;           // Select ALU input (register or immediate)
-    wire alu_op;            // ALU operation (ADD or SUB)
+    wire [1:0]alu_op;            // ALU operation (ADD or SUB)
     wire pc_src;            // Select next PC (PC+1 or jump target)
+    wire mem_to_reg;        // Select data source for register write (ALU or memory)
 
     // Data wires
     wire [7:0] read_data1;  // Data read from register 1
@@ -57,10 +58,11 @@ module risc_processor (
     assign pc_plus1 = pc_current + 1;
 
     // Determine next PC: jump target (from instruction) or PC+1
-    assign pc_next = (pc_src) ? {1'b0, instruction[6:0]} : pc_plus1;
+    assign pc_next = (pc_src) ? immediate : pc_plus1;
 
     // Instruction Memory (ROM): stores program instructions
     instruction_memory imem (
+        .clk(clk),             // Clock input
         .address(pc_current),   // Address to read from
         .instruction(instruction) // Instruction output
     );
@@ -80,7 +82,8 @@ module risc_processor (
         .mem_write(mem_write), // Memory write enable
         .alu_src(alu_src),     // ALU input select
         .alu_op(alu_op),       // ALU operation select
-        .pc_src(pc_src)        // PC source select
+        .pc_src(pc_src),        // PC source select
+        .mem_to_reg(mem_to_reg) // Memory to register select
     );
 
     // Register File: stores 4 general-purpose 8-bit registers
@@ -119,7 +122,7 @@ module risc_processor (
     );
 
     // Writeback multiplexer: selects between ALU result and memory data
-    assign write_data_reg = (opcode == 3'b010) ? mem_read_data : alu_result;
+    assign write_data_reg = (mem_to_reg) ? mem_read_data : alu_result;
 
     // Optional: data output for external devices (e.g., store to output port)
     // If writing to address 0xFF, output the data
@@ -134,14 +137,14 @@ endmodule
 
 // Program Counter module: tracks current instruction address
 module pc (
-    input clk,
-    input reset,
-    input [7:0] next_pc,
-    output reg [7:0] current_pc
+    input clk,           // Clock input
+    input reset,         // Reset input
+    input [7:0] next_pc,    // Next address to jump to
+    output reg [7:0] current_pc // Current instruction address
 );
     always @(posedge clk or posedge reset) begin
-        if (reset) current_pc <= 0;
-        else current_pc <= next_pc;
+        if (reset) current_pc <= 0; // Reset to address 0
+        else current_pc <= next_pc; // Update to next address
     end
 endmodule
 
@@ -149,75 +152,83 @@ endmodule
 
 
 
-
-// Instruction Memory (ROM): stores program instructions
+// Instruction Memory: stores program instructions in ROM
 module instruction_memory (
-    input [7:0] address,
-    output [15:0] instruction
+    inout clk,
+    input [7:0] address, // Address to read instruction from
+    output reg [15:0] instruction // Instruction output
 );
-    reg [15:0] rom [0:255];
-    integer i;
+    parameter MEM_INIT_FILE = ""; // Memory initialization file (hex format)
+    reg [15:0] rom [0:255]; // ROM memory
+    
     initial begin
-        // CORRECTED INSTRUCTIONS:
-        rom[0] = 16'h4810; // LOAD R1, 0x10(R0)   [010_01_00_00_00010000]
-        rom[1] = 16'h1200; // ADD R2, R1, R0      [000_10_01_00_00000000]
-        rom[2] = 16'h7020; // STORE R2, 0x20(R0)  [011_10_00_00_00100000]
-        rom[3] = 16'h8005; // JUMP 0x05           [100_00_00_00_00000101]
-        for (i=4; i<256; i=i+1) rom[i] = 16'h0000;
+        if (MEM_INIT_FILE != "") begin 
+            // Initialize ROM from file
+            $readmemh(MEM_INIT_FILE, rom); 
+        end else begin
+            // Default program
+            rom[0] = 16'h4810; // LOAD R1, 0x10(R0)   ; R1 = MEM[0x10]
+            rom[1] = 16'h1200; // ADD R2, R1, R0      ; R2 = R1 + R0
+            rom[2] = 16'h7020; // STORE R2, 0x20(R0)  ; MEM[0x20] = R2
+            rom[3] = 16'h8005; // JUMP 0x05           ; Jump to instruction 5
+            rom[5] = 16'h48FF; // LOAD R1, 0xFF(R0)   ; R1 = external_data_in
+            rom[6] = 16'h1D80; // SUB R3, R1, R2      ; R3 = R1 - R2
+
+            for (integer i=7; i<256; i++) rom[i] = 16'h0000;
+        end
     end
-    assign instruction = rom[address];
+    
+    always @(posedge clk) begin
+        instruction = rom[address]; // Read instruction from ROM
+    end
 endmodule
 
 
 
 
 
-
-// Control Unit: decodes opcode and generates control signals
+// Control Unit
 module control_unit (
     input [2:0] opcode,
     output reg reg_write,
     output reg mem_read,
     output reg mem_write,
     output reg alu_src,
-    output reg alu_op,
-    output reg pc_src
+    output reg [1:0] alu_op,
+    output reg pc_src,
+    output reg mem_to_reg
 );
     always @(*) begin
-        // DEFAULT ALL SIGNALS TO 0
-        {reg_write, mem_read, mem_write, alu_src, alu_op, pc_src} = 0;
-        
+        // Default
+        {reg_write, mem_read, mem_write, alu_src, alu_op, pc_src, mem_to_reg} = 9'b0;
+
         case (opcode)
             3'b000: begin // ADD
                 reg_write = 1;
-                alu_op   = 0;
+                alu_op = 2'b00;
             end
             3'b001: begin // SUB
                 reg_write = 1;
-                alu_op   = 1;
+                alu_op = 2'b01;
             end
             3'b010: begin // LOAD
                 reg_write = 1;
-                mem_read  = 1;
-                alu_src   = 1;  // Use immediate
-                alu_op    = 0;  // ADD for address calc
+                mem_read = 1;
+                alu_src = 1;
+                alu_op = 2'b00;
+                mem_to_reg = 1;
             end
             3'b011: begin // STORE
                 mem_write = 1;
-                alu_src   = 1;  // Use immediate
-                alu_op    = 0;  // ADD for address calc
+                alu_src = 1;
+                alu_op = 2'b00;
             end
             3'b100: begin // JUMP
                 pc_src = 1;
             end
-            default: begin // Default case
-                reg_write = 0;
-                mem_read  = 0;
-                mem_write = 0;
-                alu_src   = 0;
-                alu_op    = 0;
-                pc_src    = 0;
+            3'b111: begin
             end
+            default: ; // NOP or undefined
         endcase
     end
 endmodule
@@ -230,34 +241,29 @@ endmodule
 // Register File: stores 4 general-purpose 8-bit registers
 module register_file (
     input reset,
-    input clk,                // Clock signal
-    input reg_write,          // Write enable
-    input [1:0] read_reg1,    // Read register 1 address
-    input [1:0] read_reg2,    // Read register 2 address
-    input [1:0] write_reg,    // Write register address
-    input [7:0] write_data,   // Data to write
-    output reg [7:0] read_data1, // Data from register 1
-    output reg [7:0] read_data2  // Data from register 2
+    input clk,
+    input reg_write,
+    input [1:0] read_reg1,
+    input [1:0] read_reg2,
+    input [1:0] write_reg,
+    input [7:0] write_data,
+    output reg [7:0] read_data1,
+    output reg [7:0] read_data2
 );
-    reg [7:0] regs [0:3];     // 4x8-bit registers
-
-    initial begin // Initialize registers to 0
-        // Set all registers to 0 at startup
-    regs[0] = 0; regs[1] = 0; regs[2] = 0; regs[3] = 0;
-    end
-
-
-    // Write to register on clock edge if write is enabled
+    reg [7:0] regs [0:3];
+    
     always @(posedge clk or posedge reset) begin
         if (reset) begin
-        regs[0] <= 0; regs[1] <= 0; regs[2] <= 0; regs[3] <= 0;
-        end else if (reg_write) begin
-        regs[write_reg] <= write_data;
+            regs[0] <= 8'h00;
+            regs[1] <= 8'h00;
+            regs[2] <= 8'h00;
+            regs[3] <= 8'h00;
+        end
+        else if (reg_write) begin
+            regs[write_reg] <= write_data;
         end
     end
-
-
-    // Read from registers (combinational)
+    
     always @(*) begin
         read_data1 = regs[read_reg1];
         read_data2 = regs[read_reg2];
@@ -268,18 +274,19 @@ endmodule
 
 
 
+
 // ALU: performs ADD or SUB
 module alu (
-    input [7:0] a,           // Input A
-    input [7:0] b,           // Input B
-    input op,                // Operation (0: ADD, 1: SUB)
-    output reg [7:0] result  // Result output
+    input [7:0] a,
+    input [7:0] b,
+    input [1:0] op,              // Now 2-bit ALU op
+    output reg [7:0] result
 );
     always @(*) begin
         case (op)
-            0: result = a + b; // ADD operation
-            1: result = a - b; // SUB operation
-            default: result = 8'h00; // Default to 0
+            2'b00: result = a + b;  // ADD
+            2'b01: result = a - b;  // SUB
+            default: result = 8'h00;
         endcase
     end
 endmodule
@@ -290,30 +297,25 @@ endmodule
 
 // Data Memory (RAM with I/O): stores data and handles I/O
 module data_memory (
-    input clk,                // Clock signal
-    input mem_read,           // Read enable
-    input mem_write,          // Write enable
-    input [7:0] address,      // Address to read/write
-    input [7:0] write_data,   // Data to write
-    output reg [7:0] read_data, // Data read from memory/I/O
-    input [7:0] external_data_in // External data input
+    input clk,
+    input mem_read,
+    input mem_write,
+    input [7:0] address,
+    input [7:0] write_data,
+    output reg [7:0] read_data,
+    input [7:0] external_data_in
 );
-    reg [7:0] ram [0:255];    // 256x8 RAM for data
-
-    // Write to RAM on clock edge if write is enabled and not I/O address
+    reg [7:0] ram [0:255];
+    
     always @(posedge clk) begin
         if (mem_write && address != 8'hFF)
             ram[address] <= write_data;
-    end
-
-    // Read from RAM or external input (combinational)
-    always @(*) begin
+            
         if (mem_read) begin
-            if (address == 8'hFF) // If address is I/O, read external input
-                read_data = external_data_in;
-            else                  // Otherwise, read from RAM
-                read_data = ram[address];
-        end else
-            read_data = 8'h00;    // Default output if not reading
+            if (address == 8'hFF)
+                read_data <= external_data_in;
+            else
+                read_data <= ram[address];
+        end
     end
 endmodule
