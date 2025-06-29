@@ -1,5 +1,6 @@
 `timescale 1ns / 1ps
-`include "../rtl/risc_core.v"
+`include "risc_core.v"
+
 
 module core_tb();
     reg clk;
@@ -56,7 +57,7 @@ module core_tb();
         // Display results
         $display("Test completed:");
         $display("Final PC = %h", pc);
-        $display("R3 value = %h", uut.register_file[3]);
+        $display("R3 value = %h", uut.reg_file.registers[3]);
         
         $finish;
     end
@@ -65,8 +66,8 @@ module core_tb();
     always @(posedge clk) begin
         $display("[%t] PC=%h Instr=%h R1=%h R2=%h R3=%h", 
             $time, pc, instr, 
-            uut.register_file[1], 
-            uut.register_file[2], 
-            uut.register_file[3]);
+            uut.reg_file.registers[1], 
+            uut.reg_file.registers[2], 
+            uut.reg_file.registers[3]);
     end
 endmodule
