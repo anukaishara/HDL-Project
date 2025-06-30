@@ -5,7 +5,7 @@
 
 module risc_processor (
     input clk,                    // Clock signal
-    input reset,                  // Reset signal (active high)
+    input reset,                  // Reset signal (active low)
     input [7:0] external_data_in, // External data input
     output [7:0] data_out         // Data output 
 );
@@ -138,7 +138,7 @@ endmodule
 // Program Counter module: tracks current instruction address
 module pc (
     input clk,           // Clock input
-    input reset,         // Reset input
+    input reset,         // Reset input (active low)
     input [7:0] next_pc,    // Next address to jump to
     output reg [7:0] current_pc // Current instruction address
 );
@@ -157,25 +157,21 @@ module instruction_memory (
     input [7:0] address,               // Address to read instruction from
     output reg [15:0] instruction      // Instruction output
 );
-    parameter MEM_INIT_FILE = "";      // Memory initialization file (hex format)
+
     reg [15:0] rom [0:255];            // ROM memory
     
+    integer i; 
     initial begin
-        integer i;                     // Declare loop variable inside initial
-        if (MEM_INIT_FILE != "") begin 
-            // Initialize ROM from file
-            $readmemh(MEM_INIT_FILE, rom); 
-        end else begin
+        i = 0;            // Initialize loop variable
             // Example : Output the Bitwise Inverse of the Input
-            rom[0] = 16'h48FF; // LOAD R1, 0xFF(R0)        ; R1 = external_data_in
-            rom[1] = 16'h0900; // SUB R2, R0, R1           ; R2 = 0 - R1 = ~R1 + 1 (two's complement)
-            rom[2] = 16'h1201; // ADD R2, R2, R0 + 1       ; R2 = R2 + 1 = ~R1    (if immediate add supported)
-            rom[3] = 16'h72FF; // STORE R2, 0xFF(R0)       ; LEDs = ~input
-            rom[4] = 16'h8004; // JUMP 0x04                ; Loop forever
+        rom[0] = 16'h48FF; // LOAD R1, 0xFF(R0)        ; R1 = external_data_in
+        rom[1] = 16'h0900; // SUB R2, R0, R1           ; R2 = 0 - R1 = ~R1 + 1 (two's complement)
+        rom[2] = 16'h1201; // ADD R2, R2, R0 + 1       ; R2 = R2 + 1 = ~R1    (if immediate add supported)
+        rom[3] = 16'h72FF; // STORE R2, 0xFF(R0)       ; LEDs = ~input
+        rom[4] = 16'h8004; // JUMP 0x04                ; Loop forever
 
-            for (i = 5; i < 256; i = i + 1) begin
-                rom[i] = 16'h0000;
-            end
+        for (i = 5; i < 256; i = i + 1) begin
+            rom[i] = 16'h0000;
         end
     end
     
@@ -306,14 +302,16 @@ module data_memory (
     output reg [7:0] read_data,
     input [7:0] external_data_in
 );
+
+    parameter IO_ADDRESS = 8'hFF;
     reg [7:0] ram [0:255];
     
     always @(posedge clk) begin
-        if (mem_write && address != 8'hFF)
+        if (mem_write && address != IO_ADDRESS)
             ram[address] <= write_data;
             
         if (mem_read) begin
-            if (address == 8'hFF)
+            if (address == IO_ADDRESS)
                 read_data <= external_data_in;
             else
                 read_data <= ram[address];
